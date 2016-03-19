@@ -86,7 +86,7 @@
           "Ref": "IntergetGW"
         },
         "DestinationCidrBlock": "0.0.0.0/0"
-      }
+      },
       "DependsOn": [
         "IGWAttach"
       ]
