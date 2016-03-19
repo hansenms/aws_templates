@@ -1,298 +1,248 @@
 {
-  "AWSTemplateFormatVersion": "2010-09-09",
-  "Parameters": {
-    "KeyName": {
-      "Description": "The EC2 Key Pair to allow SSH access to the instance",
-      "Type": "AWS::EC2::KeyPair::KeyName"
-    },
-    "ControllerInstanceType": {
-      "Type": "String",
-      "Default": "c4.8xlarge",
-      "AllowedValues": [
-        "m3.xlarge",
-        "c3.4xlarge",
-        "r3.4xlarge",
-        "c4.8xlarge",
-        "c4.4xlarge",
-        "c4.2xlarge"
-      ],
-      "Description": "Controller Instance Type"
-    },
-    "NodeInstanceType": {
-      "Type": "String",
-      "Default": "c4.8xlarge",
-      "AllowedValues": [
-        "m3.xlarge",
-        "c3.4xlarge",
-        "c4.8xlarge",
-        "c4.4xlarge",
-        "c4.2xlarge"
-      ],
-      "Description": "Enter m3.xlarge, c3.4xlarge, c4.8xlarge, c4.4xlarge, c4.2xlarge. Default is: c4.8xlarge"
-    },
-    "NodeAMI": {
-      "Type": "String",
-      "Default": "ami-a98cb2c3",
-      "Description": "Enter ami"
-    },
-    "ControllerAMI": {
-      "Type": "String",
-      "Default": "ami-a98cb2c3",
-      "Description": "Enter ami"
-    },
-    "ClusterName": {
-      "Type": "String",
-      "Default": "gtCluster",
-      "Description": "Cluster Name"
-    }
-  },
-  "Resources": {
-    "GadgetronVPC": {
-      "Type": "AWS::EC2::VPC",
-      "Properties": {
-        "EnableDnsSupport": "true",
-        "EnableDnsHostnames": "true",
-        "CidrBlock": "10.0.0.0/16"
-      }
-    },
-    "PublicRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "GadgetronVPC"
-        }
-      }
-    },
-    "IntergetGW": {
-      "Type": "AWS::EC2::InternetGateway",
-      "Properties": {}
-    },
-    "GadgetronSubnet": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "GadgetronVPC"
-        },
-        "CidrBlock": "10.0.0.0/24"
-      }
-    },
-    "Route": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "GatewayId": {
-          "Ref": "IntergetGW"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0"
-      },
-      "DependsOn": [
-        "IGWAttach"
-      ]
-    },
-    "RTBAssoc": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "GadgetronSubnet"
-        }
-      }
-    },
-    "gtASLC": {
-      "Type": "AWS::AutoScaling::LaunchConfiguration",
-      "Properties": {
-        "SecurityGroups": [
-          {
-            "Ref": "gtCloudSecurityGroup"
-          }
-        ],
-        "UserData": {
-          "Fn::Base64": {
-            "Fn::Join": [
-              "",
-              [
-                "#!/bin/bash\n",
-                "echo ECS_CLUSTER=GadgetronCluster >> /etc/ecs/ecs.config"
-              ]
-            ]
-          }
-        },
-        "IamInstanceProfile": "ecsInstanceRole",
-        "EbsOptimized": false,
-        "InstanceMonitoring": true,
-        "BlockDeviceMappings": [
-          {
-            "DeviceName": "/dev/xvdcz",
-            "Ebs": {
-              "DeleteOnTermination": true,
-              "Encrypted": false,
-              "VolumeSize": 30,
-              "VolumeType": "gp2"
-            }
-          },
-          {
-            "DeviceName": "/dev/xvda",
-            "Ebs": {
-              "DeleteOnTermination": true,
-              "VolumeSize": 8,
-              "VolumeType": "gp2"
-            }
-          }
-        ],
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
         "KeyName": {
-          "Ref": "KeyName"
+            "Description": "The EC2 Key Pair to allow SSH access to the instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
         },
-        "ImageId": {
-          "Ref": "NodeAMI"
-        },
-        "InstanceType": {
-          "Ref": "NodeInstanceType"
-        },
-        "AssociatePublicIpAddress": true
-      }
-    },
-    "gtASASG": {
-      "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "Properties": {
-        "MaxSize": 10,
-        "MinSize": 0,
-        "DesiredCapacity": 1,
-        "VPCZoneIdentifier": [
-          {
-            "Ref": "GadgetronSubnet"
-          }
-        ],
-        "LaunchConfigurationName": {
-          "Ref": "gtASLC"
-        },
-        "LoadBalancerNames": [
-          {
-            "Ref": "LoadBalancer"
-          }
-        ]
-      }
-    },
-    "LoadBalancer": {
-      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
-      "Properties": {
-        "Subnets": [
-          {
-            "Ref": "GadgetronSubnet"
-          }
-        ],
-        "SecurityGroups": [
-          {
-            "Ref": "gtCloudSecurityGroup"
-          }
-        ],
-        "Listeners": [
-          {
-            "LoadBalancerPort": "9080",
-            "InstancePort": "9080",
-            "Protocol": "TCP",
-            "InstanceProtocol": "TCP"
-          }
-        ]
-      }
-    },
-    "IGWAttach": {
-      "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "InternetGatewayId": {
-          "Ref": "IntergetGW"
-        },
-        "VpcId": {
-          "Ref": "GadgetronVPC"
-        }
-      }
-    },
-    "SubnetRouteTableAssoc": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "GadgetronSubnet"
-        }
-      }
-    },
-    "gtCloudSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "VpcId": {
-          "Ref": "GadgetronVPC"
-        },
-        "GroupDescription": "Allow access from SSH traffic",
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": "9080",
-            "ToPort": "9080",
-            "CidrIp": "0.0.0.0/0"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": "22",
-            "ToPort": "22",
-            "CidrIp": "0.0.0.0/0"
-          }
-        ]
-      }
-    },
-    "ControllerVM": {
-      "Type": "AWS::EC2::Instance",
-      "Properties": {
-        "IamInstanceProfile": "gtCloudController",
-        "EbsOptimized": false,
-        "Monitoring": true,
-        "BlockDeviceMappings": [
-          {
-            "DeviceName": "/dev/xvdcz",
-            "Ebs": {
-              "DeleteOnTermination": true,
-              "Encrypted": false,
-              "VolumeSize": 30,
-              "VolumeType": "gp2"
-            }
-          },
-          {
-            "DeviceName": "/dev/xvda",
-            "Ebs": {
-              "DeleteOnTermination": true,
-              "VolumeSize": 8,
-              "VolumeType": "gp2"
-            }
-          }
-        ],
-        "KeyName": {
-          "Ref": "KeyName"
-        },
-        "ImageId": {
-          "Ref": "ControllerAMI"
-        },
-        "InstanceType": {
-          "Ref": "ControllerInstanceType"
-        },
-        "NetworkInterfaces": [
-          {
-            "AssociatePublicIpAddress": "true",
-            "DeviceIndex": "0",
-            "GroupSet": [
-              {
-                "Ref": "gtCloudSecurityGroup"
-              }
+        "NodeInstanceType": {
+            "Type": "String",
+            "Default": "c4.8xlarge",
+            "AllowedValues": [
+                "m3.xlarge",
+                "m4.4xlarge",
+                "c3.4xlarge",
+                "c4.8xlarge",
+                "c4.4xlarge",
+                "c4.2xlarge"
             ],
-            "SubnetId": {
-              "Ref": "GadgetronSubnet"
+            "Description": "Enter m3.xlarge, c3.4xlarge, c4.8xlarge, c4.4xlarge, c4.2xlarge. Default is: c4.8xlarge"
+        },
+        "NodeAMI": {
+            "Type": "String",
+            "Default": "ami-a98cb2c3",
+            "Description": "Enter ami"
+        }
+    },
+    "Resources": {
+        "GadgetronVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "EnableDnsSupport": "true",
+                "EnableDnsHostnames": "true",
+                "CidrBlock": "10.0.0.0/16"
             }
-          }
-        ]
-      }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "GadgetronVPC"
+                }
+            }
+        },
+        "InternetGW": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {}
+        },
+        "GadgetronSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "GadgetronVPC"
+                },
+                "CidrBlock": "10.0.0.0/24"
+            }
+        },
+        "Route": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "GatewayId": {
+                    "Ref": "InternetGW"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0"
+            },
+            "DependsOn": [
+                "IGWAttach"
+            ]
+        },
+        "RTBAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "GadgetronSubnet"
+                }
+            }
+        },
+        "gtCluster": {
+            "Type": "AWS::ECS::Cluster"
+        },
+        "gtASLC": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "gtCloudSecurityGroup"
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash\n",
+                                { "Fn::Join": [ "", ["echo ECS_CLUSTER=", {"Ref": "gtCluster"}, " >> /etc/ecs/ecs.config \n"]]},
+                                "yum install -y wget\n",
+                                "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/setup_node.sh\n",
+                                "sh ./setup_node gadgetron.dep2 gtCloudNode\n"
+                            ]
+                        ]
+                    }
+                },
+                "IamInstanceProfile": "gtCloudNode",
+                "EbsOptimized": false,
+                "InstanceMonitoring": true,
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvdcz",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "Encrypted": false,
+                            "VolumeSize": 30,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "VolumeSize": 8,
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "ImageId": {
+                    "Ref": "NodeAMI"
+                },
+                "InstanceType": {
+                    "Ref": "NodeInstanceType"
+                },
+                "AssociatePublicIpAddress": true
+            }
+        },
+        "gtASASG": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "MaxSize": 10,
+                "MinSize": 0,
+                "DesiredCapacity": 1,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "GadgetronSubnet"
+                    }
+                ],
+                "LaunchConfigurationName": {
+                    "Ref": "gtASLC"
+                },
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "LoadBalancer"
+                    }
+                ],
+                "MetricsCollection": {
+                    "Granularity" : "1minute"
+                }
+            }
+        },
+        "LoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "Subnets": [
+                    {
+                        "Ref": "GadgetronSubnet"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "gtCloudSecurityGroup"
+                    }
+                ],
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "9080",
+                        "InstancePort": "9080",
+                        "Protocol": "TCP",
+                        "InstanceProtocol": "TCP"
+                    },
+                    {
+                        "LoadBalancerPort": "9002",
+                        "InstancePort": "9002",
+                        "Protocol": "TCP",
+                        "InstanceProtocol": "TCP"
+                    },
+                    {
+                        "LoadBalancerPort": "22",
+                        "InstancePort": "22",
+                        "Protocol": "TCP",
+                        "InstanceProtocol": "TCP"
+                    }
+
+                ]
+            }
+        },
+        "IGWAttach": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGW"
+                },
+                "VpcId": {
+                    "Ref": "GadgetronVPC"
+                }
+            }
+        },
+        "SubnetRouteTableAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "GadgetronSubnet"
+                }
+            }
+        },
+        "gtCloudSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "GadgetronVPC"
+                },
+                "GroupDescription": "Allow access from SSH traffic",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "9080",
+                        "ToPort": "9080",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        }
     }
-  }
 }
