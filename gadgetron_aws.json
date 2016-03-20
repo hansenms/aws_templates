@@ -7,7 +7,7 @@
         },
         "NodeInstanceType": {
             "Type": "String",
-            "Default": "c4.8xlarge",
+            "Default": "m4.4xlarge",
             "AllowedValues": [
                 "m3.xlarge",
                 "m4.4xlarge",
@@ -16,11 +16,25 @@
                 "c4.4xlarge",
                 "c4.2xlarge"
             ],
-            "Description": "Enter m3.xlarge, c3.4xlarge, c4.8xlarge, c4.4xlarge, c4.2xlarge. Default is: c4.8xlarge"
+            "Description": "Compute node instance type"
         },
         "NodeAMI": {
             "Type": "String",
             "Default": "ami-a98cb2c3",
+            "Description": "Enter ami"
+        },
+        "NFSInstanceType": {
+            "Type": "String",
+            "Default": "t2.medium",
+            "AllowedValues": [
+                "t2.medium",
+                "t2.large"
+            ],
+            "Description": "NFS Server instance type"
+        },
+        "NFSAMI": {
+            "Type": "String",
+            "Default": "ami-8fcee4e5",
             "Description": "Enter ami"
         }
     },
@@ -80,6 +94,154 @@
                 }
             }
         },
+        "NFSSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Enable internal access to the NFS Instance",
+                "VpcId"            : {
+                    "Ref" : "GadgetronVPC"
+                },
+                "SecurityGroupIngress" : [
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "111",
+                        "ToPort"     : "111",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "111",
+                        "ToPort"     : "111",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "892",
+                        "ToPort"     : "892",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "892",
+                        "ToPort"     : "892",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "2049",
+                        "ToPort"     : "2049",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "2049",
+                        "ToPort"     : "2049",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "32803",
+                        "ToPort"     : "32803",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "32769",
+                        "ToPort"     : "32769",
+                        "CidrIp"     : "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "22",
+                        "ToPort"     : "22",
+                        "CidrIp"     : "10.0.0.0/16"
+                    }
+                ]
+            }
+        },
+        "FileServerInstance" : {
+            "Type" : "AWS::EC2::Instance",
+            "Metadata" : {
+                "Comment" : "",
+                "AWS::CloudFormation::Init" : {
+                    "config" : {
+                        "packages" : {
+                            "yum" : {
+                                "nfs-utils"             : [],
+                                "nfs-utils-lib"         : [],
+                                "rpcbind"               : []                
+                            }
+                        },
+                        "services" : {
+                            "sysvinit" : {
+                                "nfs" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties" : {
+                "SecurityGroupIds" : [{ "Ref" : "NFSSecurityGroup" }],
+                "SubnetId" : { "Ref" : "GadgetronSubnet" },
+                "InstanceType" : { "Ref" : "NFSInstanceType" },
+                "KeyName" : { "Ref" : "KeyName" },
+                "ImageId": {
+                    "Ref": "NFSAMI"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvdcz",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "Encrypted": false,
+                            "VolumeSize": 30,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "VolumeSize": 10,
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+
+                "UserData"          : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "#!/bin/bash -v\n",
+                                "yum update -y\n",
+                                "yum install aws-cfn-bootstrap -y\n",
+                                "# download data and install file\n",
+                                "/opt/aws/bin/cfn-init -s ",
+                                {
+                                    "Ref" : "AWS::StackName"
+                                },
+                                " -r NFSServer ",
+                                "    --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                " || error_exit 'Failed to run cfn-init'\n",
+                                "mkdir -p /nfs\n",
+                                "echo \"/nfs 10.0.0.0/16(rw,no_root_squash,no_subtree_check,sync)\" > /etc/exports\n",
+                                "exportfs -av\n",
+                                "/sbin/service rpcbind restart\n",
+                                "/sbin/service nfs restart\n"
+                            ]
+                        ]
+                    }
+                }
+
+            }
+        },
         "gtCluster": {
             "Type": "AWS::ECS::Cluster"
         },
@@ -98,9 +260,13 @@
                             [
                                 "#!/bin/bash\n",
                                 { "Fn::Join": [ "", ["echo ECS_CLUSTER=", {"Ref": "gtCluster"}, " >> /etc/ecs/ecs.config \n"]]},
-                                "yum install -y wget\n",
-                                "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/setup_node.sh\n",
-                                "sh ./setup_node.sh gadgetron.dep2 gtCloudNode\n"
+                                "yum install -y nfs-utils rpcbind\n",
+                                "mkdir -p /mnt/nfsshare\n",
+                                "echo \"",
+                                { "Fn::GetAtt": ["FileServerInstance", "PrivateIp"] },
+                                ":/nfs    /mnt/nfsshare       nfs rsize=8192,wsize=8192,timeo=14,intr 0 0\" >> /etc/fstab\n",
+                                "/sbin/service rpcbind restart\n",
+                                "mount -a"
                             ]
                         ]
                     }
@@ -141,6 +307,7 @@
         },
         "gtASASG": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": ["FileServerInstance"],
             "Properties": {
                 "MaxSize": 10,
                 "MinSize": 0,
