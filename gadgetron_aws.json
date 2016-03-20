@@ -100,7 +100,7 @@
                                 { "Fn::Join": [ "", ["echo ECS_CLUSTER=", {"Ref": "gtCluster"}, " >> /etc/ecs/ecs.config \n"]]},
                                 "yum install -y wget\n",
                                 "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/setup_node.sh\n",
-                                "sh ./setup_node gadgetron.dep2 gtCloudNode\n"
+                                "sh ./setup_node.sh gadgetron.dep2 gtCloudNode\n"
                             ]
                         ]
                     }
@@ -159,7 +159,7 @@
                     }
                 ],
                 "MetricsCollection": [{
-                    "Granularity" : "1minute"
+                    "Granularity" : "1Minute"
                 }]
             }
         },
