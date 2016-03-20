@@ -224,7 +224,7 @@
                                 {
                                     "Ref" : "AWS::StackName"
                                 },
-                                " -r NFSServer ",
+                                " -r FileServerInstance ",
                                 "    --region ",
                                 {
                                     "Ref" : "AWS::Region"
