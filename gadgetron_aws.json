@@ -22,20 +22,6 @@
             "Type": "String",
             "Default": "ami-a98cb2c3",
             "Description": "Enter ami"
-        },
-        "NFSInstanceType": {
-            "Type": "String",
-            "Default": "t2.medium",
-            "AllowedValues": [
-                "t2.medium",
-                "t2.large"
-            ],
-            "Description": "NFS Server instance type"
-        },
-        "NFSAMI": {
-            "Type": "String",
-            "Default": "ami-8fcee4e5",
-            "Description": "Enter ami"
         }
     },
     "Resources": {
@@ -52,15 +38,20 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "GadgetronVPC"
-                }
+                },
+                "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
             }
         },
         "InternetGW": {
             "Type": "AWS::EC2::InternetGateway",
-            "Properties": {}
+            "DependsOn": ["GadgetronVPC"],
+            "Properties" : {
+                "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
+            }
         },
         "GadgetronSubnet": {
             "Type": "AWS::EC2::Subnet",
+            "DependsOn": "GadgetronVPC",
             "Properties": {
                 "VpcId": {
                     "Ref": "GadgetronVPC"
@@ -85,161 +76,10 @@
         },
         "RTBAssoc": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "DependsOn": ["GadgetronSubnet", "PublicRouteTable"],
             "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "SubnetId": {
-                    "Ref": "GadgetronSubnet"
-                }
-            }
-        },
-        "NFSSecurityGroup" : {
-            "Type" : "AWS::EC2::SecurityGroup",
-            "Properties" : {
-                "GroupDescription" : "Enable internal access to the NFS Instance",
-                "VpcId"            : {
-                    "Ref" : "GadgetronVPC"
-                },
-                "SecurityGroupIngress" : [
-                    {
-                        "IpProtocol" : "tcp",
-                        "FromPort"   : "111",
-                        "ToPort"     : "111",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "udp",
-                        "FromPort"   : "111",
-                        "ToPort"     : "111",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "tcp",
-                        "FromPort"   : "892",
-                        "ToPort"     : "892",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "udp",
-                        "FromPort"   : "892",
-                        "ToPort"     : "892",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "tcp",
-                        "FromPort"   : "2049",
-                        "ToPort"     : "2049",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "udp",
-                        "FromPort"   : "2049",
-                        "ToPort"     : "2049",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "tcp",
-                        "FromPort"   : "32803",
-                        "ToPort"     : "32803",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "udp",
-                        "FromPort"   : "32769",
-                        "ToPort"     : "32769",
-                        "CidrIp"     : "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol" : "tcp",
-                        "FromPort"   : "22",
-                        "ToPort"     : "22",
-                        "CidrIp"     : "10.0.0.0/16"
-                    }
-                ]
-            }
-        },
-        "FileServerInstance" : {
-            "Type" : "AWS::EC2::Instance",
-            "Metadata" : {
-                "Comment" : "",
-                "AWS::CloudFormation::Init" : {
-                    "config" : {
-                        "packages" : {
-                            "yum" : {
-                                "nfs-utils"             : [],
-                                "nfs-utils-lib"         : [],
-                                "rpcbind"               : []                
-                            }
-                        },
-                        "services" : {
-                            "sysvinit" : {
-                                "nfs" : {
-                                    "enabled" : "true",
-                                    "ensureRunning" : "true"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "Properties" : {
-                "SecurityGroupIds" : [{ "Ref" : "NFSSecurityGroup" }],
-                "SubnetId" : { "Ref" : "GadgetronSubnet" },
-                "InstanceType" : { "Ref" : "NFSInstanceType" },
-                "KeyName" : { "Ref" : "KeyName" },
-                "ImageId": {
-                    "Ref": "NFSAMI"
-                },
-                "BlockDeviceMappings": [
-                    {
-                        "DeviceName": "/dev/xvdcz",
-                        "Ebs": {
-                            "DeleteOnTermination": true,
-                            "Encrypted": false,
-                            "VolumeSize": 30,
-                            "VolumeType": "gp2"
-                        }
-                    },
-                    {
-                        "DeviceName": "/dev/xvda",
-                        "Ebs": {
-                            "DeleteOnTermination": true,
-                            "VolumeSize": 10,
-                            "VolumeType": "gp2"
-                        }
-                    }
-                ],
-
-                "UserData"          : {
-                    "Fn::Base64" : {
-                        "Fn::Join" : [
-                            "",
-                            [
-                                "#!/bin/bash -v\n",
-                                "yum update -y\n",
-                                "yum install aws-cfn-bootstrap -y\n",
-                                "# download data and install file\n",
-                                "/opt/aws/bin/cfn-init -s ",
-                                {
-                                    "Ref" : "AWS::StackName"
-                                },
-                                " -r FileServerInstance ",
-                                "    --region ",
-                                {
-                                    "Ref" : "AWS::Region"
-                                },
-                                " || error_exit 'Failed to run cfn-init'\n",
-                                "mkdir -p /nfs\n",
-                                "echo \"/nfs 10.0.0.0/16(rw,no_root_squash,no_subtree_check,sync)\" > /etc/exports\n",
-                                "exportfs -av\n",
-                                "/sbin/service rpcbind restart\n",
-                                "/sbin/service nfs restart\n"
-                            ]
-                        ]
-                    }
-                }
-
+                "SubnetId": { "Ref": "GadgetronSubnet" },
+                "RouteTableId": {"Ref": "PublicRouteTable"}
             }
         },
         "gtCluster": {
@@ -260,13 +100,18 @@
                             [
                                 "#!/bin/bash\n",
                                 { "Fn::Join": [ "", ["echo ECS_CLUSTER=", {"Ref": "gtCluster"}, " >> /etc/ecs/ecs.config \n"]]},
-                                "yum install -y nfs-utils rpcbind\n",
-                                "mkdir -p /mnt/nfsshare\n",
-                                "echo \"",
-                                { "Fn::GetAtt": ["FileServerInstance", "PrivateIp"] },
-                                ":/nfs    /mnt/nfsshare       nfs rsize=8192,wsize=8192,timeo=14,intr 0 0\" >> /etc/fstab\n",
-                                "/sbin/service rpcbind restart\n",
-                                "mount -a"
+                                "yum install -y wget automake fuse-devel gcc-c++ git libcurl-devel libxml2-devel make openssl-devel\n",
+                                "mkdir -p /opt/install\n",
+                                "cd /opt/install\n",
+                                "git clone https://github.com/s3fs-fuse/s3fs-fuse.git\n",
+                                "cd s3fs-fuse\n",
+                                "./autogen.sh\n",
+                                "./configure --prefix=/usr\n",
+                                "make -j $(nproc)\n",
+                                "make install\n",
+                                "mkdir -p /mnt/bucket\n",                                
+                                "s3fs gadgetron.dep2 /mnt/bucket -o allow_other -o iam_role=gtCloudNode\n",
+                                "/sbin/service docker restart\n"
                             ]
                         ]
                     }
@@ -307,7 +152,6 @@
         },
         "gtASASG": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "DependsOn": ["FileServerInstance"],
             "Properties": {
                 "MaxSize": 10,
                 "MinSize": 0,
@@ -363,11 +207,20 @@
                         "InstanceProtocol": "TCP"
                     }
 
-                ]
+                ],
+                "HealthCheck": {
+                    "HealthyThreshold" : "3",
+                    "Interval" : "15",
+                    "Target" : "HTTP:9080/info",
+                    "Timeout" : "5",
+                    "UnhealthyThreshold" : "5"
+                }
+                
             }
         },
         "IGWAttach": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
+            "DependsOn": ["InternetGW","GadgetronVPC"],
             "Properties": {
                 "InternetGatewayId": {
                     "Ref": "InternetGW"
@@ -379,6 +232,7 @@
         },
         "SubnetRouteTableAssoc": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "DependsOn": ["PublicRouteTable", "GadgetronSubnet"],
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
@@ -400,7 +254,13 @@
                         "IpProtocol": "tcp",
                         "FromPort": "9080",
                         "ToPort": "9080",
-                        "CidrIp": "0.0.0.0/0"
+                        "CidrIp": "10.0.0.0/16"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "9002",
+                        "ToPort": "9002",
+                        "CidrIp": "10.0.0.0/16"
                     },
                     {
                         "IpProtocol": "tcp",
