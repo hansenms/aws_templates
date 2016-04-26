@@ -7,7 +7,7 @@ docker_image=$4
 
 #basic packages
 apt-get update
-apt-get install -y --no-install-recommends git emacs apt-transport-https ca-certificates curl python-pip build-essential automake autotools-dev g++ git libcurl4-gnutls-dev libfuse-dev libssl-dev libxml2-dev make pkg-config cifs-utils samba smbclient jq
+apt-get install -y --no-install-recommends git emacs apt-transport-https ca-certificates curl python-pip cifs-utils samba smbclient jq
 
 #docker 
 sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
@@ -22,14 +22,6 @@ service docker start
 
 #aws cli
 sudo pip install awscli
-
-#s3fs
-git clone https://github.com/s3fs-fuse/s3fs-fuse.git
-cd s3fs-fuse
-./autogen.sh
-./configure --prefix=/usr
-make -j $(nproc)
-make install
 
 #Download Docker image
 docker login -u $docker_username -p $docker_password -e $docker_email

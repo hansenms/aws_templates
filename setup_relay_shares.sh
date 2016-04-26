@@ -3,6 +3,7 @@
 mkdir -p "/home/shares"
 mkdir -p "/home/shares/gtlog"
 mkdir -p "/home/shares/gtdependencies"
+chmod -R a+rwX /home/shares
 
 echo "" >> "/etc/samba/smb.conf"
 echo "[gtlog]" >> "/etc/samba/smb.conf"
