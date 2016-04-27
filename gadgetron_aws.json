@@ -5,10 +5,24 @@
             "Description": "The EC2 Key Pair to allow SSH access to the instance",
             "Type": "AWS::EC2::KeyPair::KeyName"
         },
+        "RelayInstanceType": {
+            "Type": "String",
+            "Default": "m4.xlarge",
+            "AllowedValues": [
+                "m3.xlarge",
+                "m4.xlarge",
+                "m4.4xlarge",
+                "c3.4xlarge",
+                "c4.8xlarge",
+                "c4.4xlarge",
+                "c4.2xlarge"
+            ],
+            "Description": "Compute node instance type"
+        },
         "NodeInstanceType": {
             "Type": "String",
             "Default": "m4.4xlarge",
-            "AllowedValues": [
+            "AllowedValues":[
                 "m3.xlarge",
                 "m4.4xlarge",
                 "c3.4xlarge",
@@ -20,7 +34,7 @@
         },
         "NodeAMI": {
             "Type": "String",
-            "Default": "ami-a98cb2c3",
+            "Default": "ami-e28e6b8f",
             "Description": "Enter ami"
         }
     },
@@ -82,11 +96,27 @@
                 "RouteTableId": {"Ref": "PublicRouteTable"}
             }
         },
-        "gtCluster": {
-            "Type": "AWS::ECS::Cluster"
+        "RelayInstance" : {
+            "Type" : "AWS::EC2::Instance",
+            "DependsOn" : ["gtCloudSecurityGroup", "GadgetronSubnet"],
+            "Properties" : {
+                "SecurityGroupIds" : [{ "Ref" : "gtCloudSecurityGroup" }],
+                "KeyName" : { "Ref" : "KeyName"},
+                "ImageId" : {"Ref" : "NodeAMI"},
+                "InstanceType" : { "Ref" : "RelayInstanceType"},
+                "SubnetId" : { "Ref" : "GadgetronSubnet" },
+                "IamInstanceProfile": "gtCloudController",
+                "AssociatePublicIpAddress": true,
+                "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+                    "#!/bin/bash\n",
+                    "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/setup_relay_shares.sh\n",
+                    "sudo sh ./setup_relay_shares.sh\n"
+                ]]}}
+            }
         },
         "gtASLC": {
             "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "DependsOn" : ["gtCloudSecurityGroup", "GadgetronSubnet","RelayInstance"],
             "Properties": {
                 "SecurityGroups": [
                     {
@@ -99,19 +129,9 @@
                             "",
                             [
                                 "#!/bin/bash\n",
-                                { "Fn::Join": [ "", ["echo ECS_CLUSTER=", {"Ref": "gtCluster"}, " >> /etc/ecs/ecs.config \n"]]},
-                                "yum install -y wget automake fuse-devel gcc-c++ git libcurl-devel libxml2-devel make openssl-devel\n",
-                                "mkdir -p /opt/install\n",
-                                "cd /opt/install\n",
-                                "git clone https://github.com/s3fs-fuse/s3fs-fuse.git\n",
-                                "cd s3fs-fuse\n",
-                                "./autogen.sh\n",
-                                "./configure --prefix=/usr\n",
-                                "make -j $(nproc)\n",
-                                "make install\n",
-                                "mkdir -p /mnt/bucket\n",                                
-                                "s3fs gadgetron.dep2 /mnt/bucket -o allow_other -o iam_role=gtCloudNode\n",
-                                "/sbin/service docker restart\n"
+                                "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/mount_and_run_docker.sh\n",
+                                { "Fn::Join": [ "", ["sudo sh ./mount_and_run_docker.sh ", { "Fn::GetAtt" : [ "RelayInstance" , "PrivateIp" ]}, "\n"]]},
+                                "sudo service docker restart\n"
                             ]
                         ]
                     }
@@ -119,25 +139,6 @@
                 "IamInstanceProfile": "gtCloudNode",
                 "EbsOptimized": false,
                 "InstanceMonitoring": true,
-                "BlockDeviceMappings": [
-                    {
-                        "DeviceName": "/dev/xvdcz",
-                        "Ebs": {
-                            "DeleteOnTermination": true,
-                            "Encrypted": false,
-                            "VolumeSize": 30,
-                            "VolumeType": "gp2"
-                        }
-                    },
-                    {
-                        "DeviceName": "/dev/xvda",
-                        "Ebs": {
-                            "DeleteOnTermination": true,
-                            "VolumeSize": 8,
-                            "VolumeType": "gp2"
-                        }
-                    }
-                ],
                 "KeyName": {
                     "Ref": "KeyName"
                 },
@@ -147,7 +148,7 @@
                 "InstanceType": {
                     "Ref": "NodeInstanceType"
                 },
-                "AssociatePublicIpAddress": true
+                "AssociatePublicIpAddress": false
             }
         },
         "gtASASG": {
@@ -164,58 +165,9 @@
                 "LaunchConfigurationName": {
                     "Ref": "gtASLC"
                 },
-                "LoadBalancerNames": [
-                    {
-                        "Ref": "LoadBalancer"
-                    }
-                ],
                 "MetricsCollection": [{
                     "Granularity" : "1Minute"
                 }]
-            }
-        },
-        "LoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
-            "Properties": {
-                "Subnets": [
-                    {
-                        "Ref": "GadgetronSubnet"
-                    }
-                ],
-                "SecurityGroups": [
-                    {
-                        "Ref": "gtCloudSecurityGroup"
-                    }
-                ],
-                "Listeners": [
-                    {
-                        "LoadBalancerPort": "9080",
-                        "InstancePort": "9080",
-                        "Protocol": "TCP",
-                        "InstanceProtocol": "TCP"
-                    },
-                    {
-                        "LoadBalancerPort": "9002",
-                        "InstancePort": "9002",
-                        "Protocol": "TCP",
-                        "InstanceProtocol": "TCP"
-                    },
-                    {
-                        "LoadBalancerPort": "22",
-                        "InstancePort": "22",
-                        "Protocol": "TCP",
-                        "InstanceProtocol": "TCP"
-                    }
-
-                ],
-                "HealthCheck": {
-                    "HealthyThreshold" : "3",
-                    "Interval" : "15",
-                    "Target" : "HTTP:9080/info",
-                    "Timeout" : "5",
-                    "UnhealthyThreshold" : "5"
-                }
-                
             }
         },
         "IGWAttach": {
@@ -252,14 +204,8 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": "9080",
-                        "ToPort": "9080",
-                        "CidrIp": "10.0.0.0/16"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": "9002",
-                        "ToPort": "9002",
+                        "FromPort": "0",
+                        "ToPort": "65535",
                         "CidrIp": "10.0.0.0/16"
                     },
                     {
