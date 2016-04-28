@@ -106,12 +106,41 @@
                 "InstanceType" : { "Ref" : "RelayInstanceType"},
                 "SubnetId" : { "Ref" : "GadgetronSubnet" },
                 "IamInstanceProfile": "gtCloudController",
-                "AssociatePublicIpAddress": true,
                 "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
                     "#!/bin/bash\n",
                     "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/setup_relay_shares.sh\n",
-                    "sudo sh ./setup_relay_shares.sh\n"
+                    "sudo sh ./setup_relay_shares.sh\n",
+                    "mkdir -p /gtmount/gtlog\n",
+                    "mkdir -p /gtmount/gtdependencies\n",
+                    "echo \"//$(hostname)/gtlog /gtmount/gtlog cifs guest,vers=3.0,dir_mode=0777,file_mode=0777\" >> /etc/fstab\n",
+                    "echo \"//$(hostname)/gtdependencies /gtmount/gtdependencies cifs guest,vers=3.0,dir_mode=0777,file_mode=0777\" >> /etc/fstab\n",
+                    "mount -a\n",
+                    "sleep 10\n",
+                    "service docker restart\n",
+                    "sleep 3\n",
+                    "\n",
+                    "if [ -z \"$(df | grep /gtmount/gtlog)\" ]; then\n",
+                    "    echo \"Failed to mount gtlog\"\n",
+                    "    exit 113\n",
+                    "fi\n",
+                    "\n",
+                    "if [ -z \"$(df | grep /gtmount/gtdependencies)\" ]; then\n",
+                    "    echo \"Failed to mount gtdependencies\"\n",
+                    "    exit 113\n",
+                    "fi\n",
+                    "\n",
+                    "mkdir -p /gtmount/gtlog/$(hostname)\n",
+                    "service docker restart\n",
+                    "docker run -e \"GADGETRON_RELAY_HOST=192.168.2.1\" -v /gtmount/gtlog/$(hostname):/tmp -v /gtmount/gtdependencies:/tmp/gadgetron --name=gadgetron_container --publish=9002:9002 --publish=8002:8002 --publish=18002:18002 --publish=9080:9080 --restart=unless-stopped --detach -t current_gadgetron\n"
                 ]]}}
+            }
+        },
+        "PublicIPAddress" : {
+            "Type" : "AWS::EC2::EIP",
+            "DependsOn" : ["IGWAttach", "RelayInstance"],
+            "Properties" : {
+                "InstanceId" : { "Ref" : "RelayInstance" },
+                "Domain" : "vpc"
             }
         },
         "gtASLC": {
@@ -129,9 +158,28 @@
                             "",
                             [
                                 "#!/bin/bash\n",
-                                "wget https://raw.githubusercontent.com/hansenms/aws_templates/master/mount_and_run_docker.sh\n",
-                                { "Fn::Join": [ "", ["sudo sh ./mount_and_run_docker.sh ", { "Fn::GetAtt" : [ "RelayInstance" , "PrivateIp" ]}, "\n"]]},
-                                "sudo service docker restart\n"
+                                "mkdir -p /gtmount/gtlog\n",
+                                "mkdir -p /gtmount/gtdependencies\n",
+                                { "Fn::Join": [ "", ["echo \"//", { "Fn::GetAtt" : [ "RelayInstance" , "PrivateIp" ]}, "/gtlog /gtmount/gtlog cifs guest,vers=3.0,dir_mode=0777,file_mode=0777\" >> /etc/fstab\n"]]},
+                                { "Fn::Join": [ "", ["echo \"//", { "Fn::GetAtt" : [ "RelayInstance" , "PrivateIp" ]}, "/gtdependencies /gtmount/gtdependencies cifs guest,vers=3.0,dir_mode=0777,file_mode=0777\" >> /etc/fstab\n"]]},
+                                "mount -a\n",
+                                "sleep 10\n",
+                                "service docker restart\n",
+                                "sleep 3\n",
+                                "\n",
+                                "if [ -z \"$(df | grep /gtmount/gtlog)\" ]; then\n",
+                                "    echo \"Failed to mount gtlog\"\n",
+                                "    exit 113\n",
+                                "fi\n",
+                                "\n",
+                                "if [ -z \"$(df | grep /gtmount/gtdependencies)\" ]; then\n",
+                                "    echo \"Failed to mount gtdependencies\"\n",
+                                "    exit 113\n",
+                                "fi\n",
+                                "\n",
+                                "mkdir -p /gtmount/gtlog/$(hostname)\n",
+                                "service docker restart\n",
+                                { "Fn::Join": [ "", ["docker run -e \"GADGETRON_RELAY_HOST=", { "Fn::GetAtt" : [ "RelayInstance" , "PrivateIp" ]},  "\" -v /gtmount/gtlog/$(hostname):/tmp -v /gtmount/gtdependencies:/tmp/gadgetron --name=gadgetron_container --publish=9002:9002 --publish=8002:8002 --publish=18002:18002 --publish=9080:9080 --restart=unless-stopped --detach -t current_gadgetron\n"]] }
                             ]
                         ]
                     }
