@@ -8,6 +8,7 @@ instance_count=0
 reservations=$(echo $instances | jq length)
 rev_counter=$reservations
 node_status="Node \t| Id \t\t| IP \t\t| Logfile \t\t\t\t\t| Log modified \t\t|\n"
+node_status="${node_status}-----------------------------------------------------------------------------------------------------------------\n"
 while [ $rev_counter -gt 0 ]; do
     ins=$(echo $instances | jq .[$rev_counter-1])
     ic=$(echo $ins| jq '.Instances | length')
