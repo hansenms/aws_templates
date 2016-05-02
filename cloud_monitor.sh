@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Cloud monitoring for Gadgetron Azure Cloud
+# Cloud monitoring for Gadgetron AWS Cloud
 # Michael S. Hansen (michael.hansen@nih.gov
 
 scaleup_interval=5
@@ -10,10 +10,6 @@ scale_up_settle_time=300
 idle_time=1800
 node_increment=8
 verbose=0
-custom_data=$(sudo sh get_custom_data.sh)
-group=$(echo $custom_data|jq .group|tr -d '"')
-#TODO: We should fix this. Should be based on a lookup
-vmss="${group}node" 
 max_nodes=20
 
 
@@ -68,14 +64,14 @@ number_of_active_nodes()
 delete_node()
 {
     log "Deallocating node $1"
-    azure vmss delete-instances $group $vmss $1 
+    aws autoscaling terminate-instance-in-auto-scaling-group --instance-id $1 --should-decrement-desired-capacity
     log "Node $1 deallocated"
 }
 
 increment_nodes()
 {
     inc=$1
-    sh increment_vmss_capacity.sh $group $vmss $inc
+    sh increment_auto_scale_capacity.sh $inc
 }
 
 get_packet_count()
@@ -118,7 +114,7 @@ while [ "$1" != "" ]; do
 done
 
 #Make sure we are logged into azure
-bash azure_login.sh
+bash configure_cli.sh
 
 #Reset some counters before looping
 cooldown_counter=$cooldown_interval
@@ -169,14 +165,14 @@ while true; do
         log "Cool down check"
 
 	#First a check to see if we have hanging nodes that have not been provisioned properly. We should get rid of them.
-	bash delete_failed_nodes.sh $group $vmss
+	#bash delete_failed_nodes.sh $group $vmss
 
 	if [ "$ideal_nodes" -le "$nodes" ] && [ "$nodes" -gt 0 ]; then
 	    on=$(oldest_node)
 	    lastr=$(echo $on | jq .last_recon | tr -d '"')
 	    if [ "${lastr%.*}" -gt "$idle_time" ]; then
 		nip=$(echo $on | jq .address | tr -d '"')
-		iid=$(bash get_instance_id_from_ip.sh $group $vmss $nip)
+		iid=$(bash get_instance_id_from_ip.sh $nip)
 		if [ -n "$iid" ]; then
 		    log "Shutting down node $nname with IP $nip"
 		    curl http://${nip}:9080/acceptor/close
