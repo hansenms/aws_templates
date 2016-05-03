@@ -133,7 +133,12 @@
                     "chown root:root /gtmount/gtlog/$(hostname)\n",
                     "chmod 0777 /gtmount/gtlog/$(hostname)\n",
                     "service docker restart\n",
-                    "docker run -e \"GADGETRON_LOG_FILE=/tmp/gtlog/gadgetron.log\" -e \"GADGETRON_RELAY_HOST=192.168.2.1\" -v /gtmount/gtlog/$(hostname):/tmp/gtlog -v /gtmount/gtdependencies:/tmp/gadgetron --name=gadgetron_container --publish=9002:9002 --publish=8002:8002 --publish=18002:18002 --publish=9080:9080 --restart=unless-stopped --detach -t current_gadgetron\n"
+                    "docker run -e \"GADGETRON_LOG_FILE=/tmp/gtlog/gadgetron.log\" -e \"GADGETRON_RELAY_HOST=192.168.2.1\" -v /gtmount/gtlog/$(hostname):/tmp/gtlog -v /gtmount/gtdependencies:/tmp/gadgetron --name=gadgetron_container --publish=9002:9002 --publish=8002:8002 --publish=18002:18002 --publish=9080:9080 --restart=unless-stopped --detach -t current_gadgetron\n",
+                    "mkdir -p /opt/aws\n"
+                    "cd /opt/aws\n",
+                    "git clone https://github.com/hansenms/aws_templates.git\n",
+                    "sudo cp aws_template/cloud_monitor.conf /etc/init/\n",
+                    "sudo service cloud_monitor start\n"
                 ]]}}
             }
         },
@@ -208,7 +213,7 @@
             "Properties": {
                 "MaxSize": 10,
                 "MinSize": 0,
-                "DesiredCapacity": 1,
+                "DesiredCapacity": 0,
                 "VPCZoneIdentifier": [
                     {
                         "Ref": "GadgetronSubnet"
