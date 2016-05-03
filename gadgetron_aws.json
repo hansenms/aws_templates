@@ -137,7 +137,7 @@
                     "mkdir -p /opt/aws\n",
                     "cd /opt/aws\n",
                     "git clone https://github.com/hansenms/aws_templates.git\n",
-                    "sudo cp aws_template/cloud_monitor.conf /etc/init/\n",
+                    "sudo cp aws_templates/cloud_monitor.conf /etc/init/\n",
                     "sudo service cloud_monitor start\n"
                 ]]}}
             }
