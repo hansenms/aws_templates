@@ -34,7 +34,7 @@
         },
         "NodeAMI": {
             "Type": "String",
-            "Default": "ami-b3dc38de",
+            "Default": "ami-5fc93c32",
             "Description": "Enter ami"
         }
     },
