@@ -7,7 +7,7 @@ docker_image=$4
 
 #basic packages
 apt-get update
-apt-get install -y --no-install-recommends git emacs apt-transport-https ca-certificates curl python-pip cifs-utils samba smbclient jq
+apt-get install -y --no-install-recommends git emacs apt-transport-https ca-certificates curl python-pip emacs nfs-common nfs-kernel-server jq
 
 #docker 
 sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
