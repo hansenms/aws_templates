@@ -211,7 +211,7 @@
         "gtASASG": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "MaxSize": 10,
+                "MaxSize": 20,
                 "MinSize": 0,
                 "DesiredCapacity": 0,
                 "VPCZoneIdentifier": [
